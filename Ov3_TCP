@@ -1,0 +1,53 @@
+package main
+
+import (
+        . "net"
+        //. "os"
+        . "fmt"
+	"time"
+)
+
+var err error
+
+func read(conn Conn){
+	for {
+		data := make([]byte, 1024)
+		_, err := conn.Read(data)
+		checkError(err,"read")
+		Println(string(data))
+	}
+}
+
+func write(conn Conn, msg string){
+        data := []byte(msg)
+        _, err = conn.Write(data)
+        checkError(err,"write")
+}
+
+func checkError(err error,str string){
+                if err != nil{
+                        Println("Error in "+str)
+        }
+}
+
+func main(){
+	//opg 1
+        conn, err := Dial("tcp", "129.241.187.161:33546")
+        	checkError(err,"dial")
+
+        go read(conn)
+		time.Sleep(1*time.Millisecond)
+
+        write(conn, "hei\x00")
+
+	//opg2
+	listenAddr, err := ResolveTCPAddr("tcp", ":10485")
+        lstn, err := ListenTCP("tcp", listenAddr)
+        write(conn,"Connect to: "+"129.241.187.154"+":10485\x00")
+	
+        for {
+                con2,err := lstn.Accept()
+                	checkError(err,"for")
+		go read(con2)
+        }  
+}
