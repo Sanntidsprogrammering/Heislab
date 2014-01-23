@@ -1,0 +1,46 @@
+package main
+
+import (
+        . "net"
+        //. "os"
+        . "fmt"
+	"time"
+)
+
+var err error
+var myIP string
+
+func read(conn *UDPConn, myIP string){
+	for {
+		data := make([]byte, 1024)
+		_, remoteAddr, err := conn.ReadFromUDP(data)
+			checkError(err,"read")
+		if remoteAddr.IP.String() != myIP {
+			Println(string(data))
+		}
+	}
+}
+
+func write(conn Conn, msg string){
+        data := []byte(msg)
+        _, err = conn.Write(data)
+        	checkError(err,"write")
+}
+
+func checkError(err error,str string){
+        if err != nil{
+        	Println("Error in "+str)
+        }
+}
+
+func main(){
+	myIP="129.241.187.154"
+	broadConn,err := Dial("udp","129.241.187.255:20007")
+		checkError(err,"Dial()")
+	lstnAddr, err := ResolveUDPAddr("udp",":20007")
+	lstnConn,err := ListenUDP("udp",lstnAddr)
+		checkError(err,"ListenUDP()")
+	write(broadConn, "Hei UDP")
+	go read(lstnConn,myIP)
+	time.Sleep(100*time.Millisecond)
+}
