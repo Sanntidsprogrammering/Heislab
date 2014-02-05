@@ -1,0 +1,75 @@
+package main
+
+import (
+        //. "net"
+        //. "os"
+        . "fmt"
+        //"time"
+	."strconv"
+	."strings"
+)
+
+var floors,elevs int
+
+func initOrders(n int, m int )[][]int {
+	rows,cols := n,m+2
+	orders := make([][]int, rows)
+	for i := range orders{
+		orders[i] = make([]int, cols)	
+	}
+	return orders
+	
+}
+
+func printOrders(orders [][]int){
+	for i := range orders{
+		for j := range orders[0]{
+			Printf("%d ",orders[i][j])		
+		}
+		Printf("\n")
+	}
+	Printf("\n")
+}
+
+func toString(orders [][]int) string {
+	var str string
+	for i := range orders[0]{
+		for j := range orders{
+			str = str+Itoa(orders[j][i])
+			if j != len(orders)-1 {
+				str += ","			
+			}		
+		}
+		if i != len(orders[0])-1 {
+			str=str+":"
+		}
+	}
+	return str
+}
+
+func toArray(str string, orders [][]int) {
+	
+	array := Split(str,":")
+	for i := range array{
+		array2 := Split(array[i], ",")
+		for j := range array2 {
+			orders[j][i]=Atoi(array2[j])
+		}
+	}
+	Println(array)
+}
+
+func main(){
+	floors,elevs=4,1
+	orders := initOrders(floors,elevs)
+	orders2 := initOrders(floors, elevs)
+	orders[3][2] = 1
+	printOrders(orders)
+	str := toString(orders)
+	Println(str)
+	toArray(str,orders2)
+
+
+//updateOrders()
+
+}
