@@ -4,18 +4,20 @@ import (
         . "net"
         //. "os"
         . "fmt"
-	"time"
+        "time"
+	."strings"
 )
 
 var err error
+var myIP string
 
 func read(conn Conn){
-	for {
-		data := make([]byte, 1024)
-		_, err := conn.Read(data)
-		checkError(err,"read")
-		Println(string(data))
-	}
+        for {
+                data := make([]byte, 1024)
+                _, err := conn.Read(data)
+                checkError(err,"read")
+                Println(string(data))
+        }
 }
 
 func write(conn Conn, msg string){
@@ -31,26 +33,34 @@ func checkError(err error,str string){
 }
 
 func main(){
-	//opg 1
+        //opg 1
         con1, err := Dial("tcp", "129.241.187.161:33546")
-        	checkError(err,"dial")
+                checkError(err,"dial")
+
+	myIP = con1.LocalAddr().String()
+	str := Split(myIP,":")
+	myIP = str[0]
 
         go read(con1)
-		time.Sleep(1*time.Millisecond)
+                time.Sleep(1*time.Millisecond)
 
         write(con1, "hei con1\x00")
 
-	//opg2
-	listenAddr, err := ResolveTCPAddr("tcp", ":10485")
+        //opg2
+        listenAddr, err := ResolveTCPAddr("tcp", ":10485")
         lstn, err := ListenTCP("tcp", listenAddr)
-        write(con1,"Connect to: "+"129.241.187.154"+":10485\x00")
+        write(con1,"Connect to: "+myIP+":10485\x00")
+
+	
 
         con2,err := lstn.Accept()
                 checkError(err,"lstn.Accept()")
-	go read(con2)
+        go read(con2)
+                time.Sleep(1*time.Millisecond)
+        write(con2,"hei con 2\x00")
+                time.Sleep(1*time.Millisecond)
+	write(con2,"trallallaaa\x00")
 		time.Sleep(1*time.Millisecond)
-	write(con2,"hei con 2\x00")
-		time.Sleep(1*time.Millisecond)
-	Println("the end")
-	
+        Println("the end")
+        
 }
