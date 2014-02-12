@@ -1,0 +1,85 @@
+// øving 6 - phoenix (process pairs)
+
+package main
+
+import (
+     . "net"
+        //. "os"
+    . "fmt"
+      "time"
+	."strings"
+	."strconv"
+)
+
+var myIP string
+var backup string
+
+func checkError(err error,str string){
+        if err != nil{
+                Println("Error in "+str)
+        }
+}
+
+func write(conn Conn, msg string){
+        data := []byte(msg)
+		conn.Write(data)
+
+}
+
+func read(conn *UDPConn){
+        for {
+                data := make([]byte, 1024)
+                _, _, err := conn.ReadFromUDP(data)
+                        checkError(err,"read")
+                Println(string(data))
+        }
+}
+
+func main(){
+	
+	myIP = "129.241.187.159"
+	backup = Itoa(1)
+	
+//backup routine
+	
+    lstnAddr, _ := ResolveUDPAddr("udp",":20011")
+    lstnConn, _ := ListenUDP("udp",lstnAddr)	//oppretter UDP lytte-connection
+    
+    Println(lstnConn.LocalAddr().String())
+    
+
+    for {
+    	data := make([]byte, 1024)
+    	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+500 millisek
+		lstnConn.SetReadDeadline(t) 				//setter deadline på listnConn
+        _, _, err := lstnConn.ReadFromUDP(data)
+        if(err != nil){
+        	Err := Split(err.Error(),"i/o ") //splitter feilmeldingen ved "i/o "
+        	if(Err[len(Err)-1][0:len("timeout")] == "timeout"){ //feil pga "timeout"?
+        		break
+        	}
+        }
+
+        if backup != string(data){
+             backup = string(data)
+             Println("backup er nå: "+backup)
+       }
+	}
+    
+
+//master routine
+
+    broadIP := myIP+":20011"
+    broadConn,_ := Dial("udp",broadIP)
+    write(broadConn, backup)
+    time.Sleep(500*time.Millisecond)
+    
+    for{
+    Println(backup)
+    	backupInt,_ := Atoi(backup)
+    	backup = Itoa(backupInt+1)
+    	write(broadConn,backup)
+    	time.Sleep(500*time.Millisecond)
+    }
+
+}
