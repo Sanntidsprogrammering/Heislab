@@ -67,6 +67,7 @@ func main(){
 	printOrders(orders)
 	str := toString(orders)
 	Println(str)
+	Println("Husk å logge av github!")
 	toArray(str,orders2)
 
 
