@@ -3,16 +3,16 @@
 package main
 
 import (
-     . "net"
-        //. "os"
-    . "fmt"
-      "time"
-	."strings"
-	."strconv"
+    "net"
+    ."fmt"
+    "time"
+	"strings"
+	"strconv"
+	"os/exec"
 )
 
 var myIP string
-var backup string
+var backup int
 
 func checkError(err error,str string){
         if err != nil{
@@ -20,17 +20,17 @@ func checkError(err error,str string){
         }
 }
 
-func write(conn Conn, msg string){
+func write(conn net.Conn, msg string){
         data := []byte(msg)
 		conn.Write(data)
 
 }
 
-func read(conn *UDPConn){
+func read(conn net.UDPConn){
         for {
                 data := make([]byte, 1024)
                 _, _, err := conn.ReadFromUDP(data)
-                        checkError(err,"read")
+                        checkError(err,"read()")
                 Println(string(data))
         }
 }
@@ -38,47 +38,51 @@ func read(conn *UDPConn){
 func main(){
 	
 	myIP = "129.241.187.159"
-	backup = Itoa(1)
+	myBroadIP := "129.241.187.255"
+	backup = 1
 	
 //backup routine
 	
-    lstnAddr, _ := ResolveUDPAddr("udp",":20011")
-    lstnConn, _ := ListenUDP("udp",lstnAddr)	//oppretter UDP lytte-connection
+    lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
+    lstnConn, _ := net.ListenUDP("udp",lstnAddr)	//oppretter UDP lytte-connection
     
-    Println(lstnConn.LocalAddr().String())
+    //Println(lstnConn.LocalAddr().String())
     
 
     for {
     	data := make([]byte, 1024)
-    	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+500 millisek
-		lstnConn.SetReadDeadline(t) 				//setter deadline på listnConn
+    	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+		lstnConn.SetReadDeadline(t) 				//setter deadline på lstnConn
         _, _, err := lstnConn.ReadFromUDP(data)
         if(err != nil){
-        	Err := Split(err.Error(),"i/o ") //splitter feilmeldingen ved "i/o "
-        	if(Err[len(Err)-1][0:len("timeout")] == "timeout"){ //feil pga "timeout"?
+        	//Err := strings.Split(err.Error(),"i/o ") //splitter feilmeldingen ved "i/o "
+        	//if(Err[len(Err)-1][0:len("timeout")] == "timeout"){ //feil pga "timeout"?
+        		lstnConn.Close()
         		break
-        	}
+        	//}
         }
-
-        if backup != string(data){
-             backup = string(data)
-             Println("backup er nå: "+backup)
-       }
+        Msg := strings.Split(string(data),"\x00") //lager et array av dataen som splittes ved nullterminering \x00
+        msgString := Msg[0]
+		msgInt,_ := strconv.Atoi(msgString)
+        //if (backup != msgInt){
+             backup = msgInt
+       		 Println("backup er nå: ",backup)
+       //}
 	}
     
 
 //master routine
-
-    broadIP := myIP+":20011"
-    broadConn,_ := Dial("udp",broadIP)
-    write(broadConn, backup)
+	cmd := exec.Command("mate-terminal", "-x", "go", "run", "phoenix.go")
+	cmd.Run()
+    broadIP := myBroadIP+":20011"
+    broadConn,_ := net.Dial("udp",broadIP)
+    write(broadConn, strconv.Itoa(backup))
     time.Sleep(500*time.Millisecond)
     
     for{
     Println(backup)
-    	backupInt,_ := Atoi(backup)
-    	backup = Itoa(backupInt+1)
-    	write(broadConn,backup)
+    	write(broadConn,strconv.Itoa(backup))
+    	backup=backup+1
     	time.Sleep(500*time.Millisecond)
     }
 
