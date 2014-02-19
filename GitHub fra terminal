@@ -1,0 +1,6 @@
+# git clone kjøres en gang.
+# gitr pull henter endringer
+# git status henter status
+# git add / rm add remove files
+# git commit skriv kommentar
+# git push for å laste opp endringer
