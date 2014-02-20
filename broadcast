@@ -5,14 +5,14 @@ import (
         //. "os"
         . "fmt"
         //"time"
-	."strconv"
-	."strings"
+	"strconv"
+	"strings"
 )
 
 var floors,elevs int
 
-func initOrders(n int, m int )[][]int {
-	rows,cols := n,m+2
+func initOrders(floors int, elevs int )[][]int {
+	rows,cols := floors,elevs+2
 	orders := make([][]int, rows)
 	for i := range orders{
 		orders[i] = make([]int, cols)	
@@ -31,12 +31,12 @@ func printOrders(orders [][]int){
 	Printf("\n")
 }
 
-func toString(orders [][]int) string {
-	var str string
+func toString(orders [][]int) string { //gjør bestillingsarrayet om til string representasjon
+	str:=":"
 	for i := range orders[0]{
 		for j := range orders{
-			str = str+Itoa(orders[j][i])
-			if j != len(orders)-1 {
+			str = str+strconv.Itoa(orders[j][i])
+			if j != len(orders)-1 {         //bruker : for å skille kolonner (floors) og , for å skille elementer i kollonnene (elevs+2)
 				str += ","			
 			}		
 		}
@@ -44,33 +44,32 @@ func toString(orders [][]int) string {
 			str=str+":"
 		}
 	}
+	str=str+":"
 	return str
 }
 
-func toArray(str string, orders [][]int) {
+func toArray(str string, orders [][]int){    //gjør streng med bestilling om til array
 	
-	array := Split(str,":")
-	for i := range array{
-		array2 := Split(array[i], ",")
+	array := strings.Split(str,":")
+	array = array[1:len(array)-1]
+	for i := range(array) {
+		array2 := strings.Split(array[i], ",")      //bruker : for å skille kolonner (floors) og , for å skille rader (elevs + 2)
 		for j := range array2 {
-			orders[j][i]=Atoi(array2[j])
+			orders[j][i], _ = strconv.Atoi(array2[j])
+			
 		}
 	}
-	Println(array)
 }
 
 func main(){
-	floors,elevs=4,1
+	floors,elevs=4,4
 	orders := initOrders(floors,elevs)
 	orders2 := initOrders(floors, elevs)
 	orders[3][2] = 1
 	printOrders(orders)
 	str := toString(orders)
-	Println(str)
-	Println("Husk å logge av github!")
+	str = "edvin har"+str+"sugemerke på halsen"
 	toArray(str,orders2)
-
-
-//updateOrders()
+	printOrders(orders2)
 
 }
