@@ -1,0 +1,166 @@
+package main
+
+import (
+	"net"
+	."fmt"
+	"time"
+	"strings"
+	"strconv"
+	"os/exec"
+	"math/rand"
+)
+
+var myIP string
+var myBroadIP string
+var backup int
+type STATE int
+
+const (
+	INIT=0
+	SLAVE=1
+	TIMEOUT=2
+	MASTER=3
+)
+
+var state STATE
+
+func checkError(err error,str string){
+        if err != nil{
+                Println("Error in "+str)
+        }
+}
+
+func write(conn net.Conn, msg string){
+        data := []byte(msg)
+	conn.Write(data)
+
+}
+
+func read(conn net.UDPConn){
+        for {
+                data := make([]byte, 1024)
+                _, _, err := conn.ReadFromUDP(data)
+                        checkError(err,"read()")
+                Println(string(data))
+        }
+}
+
+func getMyIP() string{
+	con1, _ := net.Dial("tcp", "google.com:http")
+	myIP := con1.LocalAddr().String()
+	str := strings.Split(myIP,":")
+	myIP = str[0]
+	con1.Close()
+	return myIP
+}
+
+func initialize() {
+	lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection   
+
+
+	data := make([]byte, 1024)
+        t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+	lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+        _, _, err := lstnConn.ReadFromUDP(data)
+        if(err != nil){
+       		state=MASTER
+       	}else{
+       		state=SLAVE
+       	}
+       	
+       	lstnConn.Close()
+}
+
+func slave(){
+//backup routine
+
+	lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection   
+
+	for {
+		data := make([]byte, 1024)
+        	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+		lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+        	_, remoteAddr, err := lstnConn.ReadFromUDP(data)
+        	if(err != nil){
+  			lstnConn.Close()
+         		state=TIMEOUT
+         		break
+        	}
+        	Msg := strings.Split(string(data),"\x00") //lager et array av dataen som splittes ved nullterminering \x00
+        	msgString := Msg[0]
+		msgInt,_ := strconv.Atoi(msgString)
+        	backup = msgInt
+        	Println("backup er nå: ",backup," (sendt fra: ",remoteAddr.IP.String()," )")
+	}
+}
+
+func timeout(){
+
+	lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection 
+
+	data := make([]byte, 1024)
+	rand.Seed(time.Now().Unix())
+	timedelay := rand.Intn(1000)
+	Println(timedelay)
+       	t := time.Now().Add(1000*time.Millisecond) //lager timestruct for nå+2000 millisek
+	lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+       	_, _, err := lstnConn.ReadFromUDP(data)
+       	if(err != nil){
+       		state=MASTER
+       	}else{
+       		state=SLAVE
+       	}
+       	lstnConn.Close()
+}
+
+func master(){
+    
+
+//master routine
+	cmd := exec.Command("mate-terminal", "-x", "go", "run", "master_slave.go")
+	cmd.Run()
+	broadIP := myBroadIP+":20011"
+	broadConn,_ := net.Dial("udp",broadIP)
+	write(broadConn, strconv.Itoa(backup))
+	time.Sleep(500*time.Millisecond)
+    
+	for{
+		Println(backup)
+		write(broadConn,strconv.Itoa(backup))
+		backup=backup+1
+		time.Sleep(500*time.Millisecond)
+	}
+
+}
+
+func main(){
+
+	myIP = ""
+	myBroadIP = "129.241.187.255"
+	backup = 1
+	state=INIT
+	
+
+// find my ip
+	myIP = getMyIP()
+	Println(myIP)
+	
+	for{	
+		Printf("state : %d\n",state)
+		if(state==INIT){
+			initialize()
+		}else if(state==SLAVE){
+			slave()
+		}else if(state==TIMEOUT){
+			timeout()
+		}else if(state==MASTER){
+			master()
+		}else{
+			Println("HVA faen skjedde nå??")
+		}
+	}
+
+}
