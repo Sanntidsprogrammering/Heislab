@@ -103,9 +103,10 @@ func timeout(){
 	splitIP := strings.Split(myIP,".")
 	lastDigitsInIP,_ := strconv.Atoi(splitIP[len(splitIP)-1])
 	Println("lastDigitsInIP :",lastDigitsInIP)
-       	t := time.Now().Add(time.Duration(lastDigitsInIP)*time.Millisecond) //lager timestruct for nå+2000 millisek
+       	t := time.Now().Add(time.Duration((lastDigitsInIP-150)*20)*time.Millisecond) //lager timestruct for nå+ønsket tidsforsinkelse i millisek
 	lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
        	_, _, err := lstnConn.ReadFromUDP(data)
+       	Println("error : ",err)
        	if(err != nil){
        		state=MASTER
        	}else{
@@ -136,11 +137,9 @@ func master(){
 
 func main(){
 
-	myIP = ""
 	myBroadIP = "129.241.187.255"
 	backup = 1
 	state=INIT
-	
 
 // find my ip
 	myIP = getMyIP()
