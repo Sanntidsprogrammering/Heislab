@@ -1,11 +1,9 @@
-// øving 6 - phoenix (process pairs)
-
 package main
 
 import (
-    "net"
-    ."fmt"
-    "time"
+	"net"
+	."fmt"
+	"time"
 	"strings"
 	"strconv"
 	"os/exec"
@@ -22,7 +20,7 @@ func checkError(err error,str string){
 
 func write(conn net.Conn, msg string){
         data := []byte(msg)
-		conn.Write(data)
+	conn.Write(data)
 
 }
 
@@ -35,55 +33,65 @@ func read(conn net.UDPConn){
         }
 }
 
+func getMyIP() string{
+	con1, _ := net.Dial("tcp", "google.com:http")
+	myIP := con1.LocalAddr().String()
+	str := strings.Split(myIP,":")
+	myIP = str[0]
+	con1.Close()
+	return myIP
+}
+
 func main(){
-	
-	myIP = "129.241.187.159"
+
+	myIP = ""
 	myBroadIP := "129.241.187.255"
 	backup = 1
-	
-//backup routine
-	
-    lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
-    lstnConn, _ := net.ListenUDP("udp",lstnAddr)	//oppretter UDP lytte-connection
-    
-    //Println(lstnConn.LocalAddr().String())
-    
 
-    for {
-    	data := make([]byte, 1024)
-    	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
-		lstnConn.SetReadDeadline(t) 				//setter deadline på lstnConn
-        _, _, err := lstnConn.ReadFromUDP(data)
-        if(err != nil){
-        	//Err := strings.Split(err.Error(),"i/o ") //splitter feilmeldingen ved "i/o "
-        	//if(Err[len(Err)-1][0:len("timeout")] == "timeout"){ //feil pga "timeout"?
-        		lstnConn.Close()
-        		break
-        	//}
-        }
-        Msg := strings.Split(string(data),"\x00") //lager et array av dataen som splittes ved nullterminering \x00
-        msgString := Msg[0]
+// find my ip
+	myIP = getMyIP()
+	Println(myIP)
+
+//backup routine
+
+	lstnAddr, _ := net.ResolveUDPAddr("udp",":20011")
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection   
+
+	for {
+		data := make([]byte, 1024)
+        	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+		lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+        	_, remoteAddr, err := lstnConn.ReadFromUDP(data)
+        	if(err != nil){
+        		//Err := strings.Split(err.Error(),"i/o ") //splitter feilmeldingen ved "i/o "
+        		//if(Err[len(Err)-1][0:len("timeout")] == "timeout"){ //feil pga "timeout"?
+         		lstnConn.Close()
+         		break
+         		//}
+        	}
+        	Msg := strings.Split(string(data),"\x00") //lager et array av dataen som splittes ved nullterminering \x00
+        	msgString := Msg[0]
 		msgInt,_ := strconv.Atoi(msgString)
-        //if (backup != msgInt){
-             backup = msgInt
-       		 Println("backup er nå: ",backup)
-       //}
+        	//if (backup != msgInt){
+        	backup = msgInt
+        	Println("backup er nå: ",backup," (sendt fra: ",remoteAddr.IP.String()," )")
+       		//}
 	}
     
 
 //master routine
 	cmd := exec.Command("mate-terminal", "-x", "go", "run", "phoenix.go")
 	cmd.Run()
-    broadIP := myBroadIP+":20011"
-    broadConn,_ := net.Dial("udp",broadIP)
-    write(broadConn, strconv.Itoa(backup))
-    time.Sleep(500*time.Millisecond)
+	broadIP := myBroadIP+":20011"
+	broadConn,_ := net.Dial("udp",broadIP)
+	write(broadConn, strconv.Itoa(backup))
+	time.Sleep(500*time.Millisecond)
     
-    for{
-    Println(backup)
-    	write(broadConn,strconv.Itoa(backup))
-    	backup=backup+1
-    	time.Sleep(500*time.Millisecond)
-    }
+	for{
+		Println(backup)
+		write(broadConn,strconv.Itoa(backup))
+		backup=backup+1
+		time.Sleep(500*time.Millisecond)
+	}
 
 }
