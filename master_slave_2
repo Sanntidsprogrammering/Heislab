@@ -1,0 +1,297 @@
+package main
+
+import (
+	"net"
+	."fmt"
+	"time"
+	"strings"
+	"strconv"
+	"os/exec"
+)
+
+var orders[][]int
+var myIP string
+var lastDigitsMyIP int
+var myBroadIP string
+var port string
+var backup int
+var masterIsAlive bool
+
+type STATE int
+
+const (
+	INIT=0
+	SLAVE=1
+	TIMEOUT=2
+	MASTER=3
+)
+
+var state STATE
+
+var floors,elevs,KEY,ACTIVE int
+
+func initOrders()[][]int {
+	rows,cols := floors,elevs+2
+	orders := make([][]int, rows+2)
+	for i := range orders{
+		orders[i] = make([]int, cols)	
+	}
+	return orders
+	
+}
+
+func printOrders(){
+	for i := range orders{
+		for j := range orders[0]{
+			Printf("%d ",orders[i][j])		
+		}
+		Printf("\n")
+	}
+	Printf("\n")
+}
+
+func OrdersToString() string { //gjør bestillingsarrayet om til string representasjon
+	str:=":"
+	for i := range orders[0]{
+		for j := range orders{
+			str = str+strconv.Itoa(orders[j][i])
+			if j != len(orders)-1 {         //bruker : for å skille kolonner (floors) og , for å skille elementer i kollonnene (elevs+2)
+				str += ","			
+			}		
+		}
+		if i != len(orders[0])-1 {
+			str=str+":"
+		}
+	}
+	str=str+":"
+	return str
+}
+
+func updateOrders(str string){    //gjør streng med bestilling om til array
+	
+	array := strings.Split(str,":")
+	array = array[1:len(array)-1]
+	for i := range(array) {
+		array2 := strings.Split(array[i], ",")      //bruker : for å skille kolonner (floors) og , for å skille rader (elevs + 2)
+		for j := range array2 {
+			orders[j][i], _ = strconv.Atoi(array2[j])
+		}
+	}
+}
+
+func getHighestActiveKey() int {
+    maxKey:= 0
+    for i := range orders[KEY]{
+        if orders[KEY][i] > maxKey && orders[ACTIVE][i] == ACTIVE {
+            maxKey = orders[KEY][i]
+        }
+    }
+    return maxKey
+}
+
+func alreadyRegistered(key int) bool {
+    for i := range orders[KEY]{
+        if orders[KEY][i] == key {
+            return true
+        }
+    }
+    return false
+}
+
+func getState() STATE{
+    return state
+}
+
+func checkError(err error,str string){
+        if err != nil{
+                Println("Error in "+str)
+        }
+}
+
+func write(conn net.Conn, msg string){
+        data := []byte(msg)
+	conn.Write(data)
+
+}
+
+func read(conn net.UDPConn){
+        for {
+                data := make([]byte, 1024)
+                _, _, err := conn.ReadFromUDP(data)
+                        checkError(err,"read()")
+                Println(string(data))
+        }
+}
+
+func getMyIP() string{
+	con1, _ := net.Dial("tcp", "google.com:http")
+	myIP := con1.LocalAddr().String()
+	str := strings.Split(myIP,":")
+	myIP = str[0]
+	con1.Close()
+	return myIP
+}
+
+func getLastDigitsInIP(IP string) int {
+	splitIP := strings.Split(IP,".")
+	lastDigitsInIP,_ := strconv.Atoi(splitIP[len(splitIP)-1])
+	return lastDigitsInIP
+}
+
+func UpdateMasterIsAlive(){
+	lstnAddr, _ := net.ResolveUDPAddr("udp",port)
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr)
+
+    deadline := time.Now().Add(2000*time.Millisecond)  //deadline om 2 sek
+    lstnConn.SetReadDeadline(deadline)
+    for{
+        timeNow := time.Now()
+        data := make([]byte, 1024)
+        lstnConn.ReadFromUDP(data)
+        Msg := strings.Split(string(data),"\x00")
+        MsgSplit := strings.Split(Msg[0],"#")
+        prefix := MsgSplit[0]
+        if prefix == "master"{
+            masterIsAlive = true
+            deadline=time.Now().Add(2000*time.Millisecond)
+            lstnConn.SetReadDeadline(deadline)
+        }else if timeNow.After(deadline) {
+            masterIsAlive = false
+        }
+    }
+    
+}
+
+func initialize() {
+	lstnAddr, _ := net.ResolveUDPAddr("udp",port)
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection   
+
+	data := make([]byte, 1024)
+    t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+	lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+    _, _, err := lstnConn.ReadFromUDP(data)
+    if(err != nil){
+        //orders = initOrders()
+        //orders[KEY][2]=getLastDigitsInIP(myIP)
+        //orders[ACTIVE][2]=ACTIVE
+        //printOrders()
+        state=MASTER
+    }else{
+        state=SLAVE
+    }
+
+    lstnConn.Close()
+}
+
+func slave(){
+//backup routine
+
+	lstnAddr, _ := net.ResolveUDPAddr("udp",port)
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection   
+
+	for {
+		data := make([]byte, 1024)
+        	t := time.Now().Add(2000*time.Millisecond) //lager timestruct for nå+2000 millisek
+		lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+        	_, remoteAddr, err := lstnConn.ReadFromUDP(data)
+        	if(err != nil){
+  			    lstnConn.Close()
+         		state=TIMEOUT
+         		break
+        	}
+        	Msg := strings.Split(string(data),"\x00") //lager et array av dataen som splittes ved nullterminering \x00
+        	msgString := Msg[0]
+        	msgSplit := strings.Split(msgString,"#")
+        	orders_Str := msgSplit[1]
+		    updateOrders(orders_Str)
+        	Println("orders[0][0] er nå: ",orders[0][0]," (sendt fra: ",remoteAddr.IP.String()," )")
+	}
+}
+
+func timeout(){
+
+	lstnAddr, _ := net.ResolveUDPAddr("udp",port)
+	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection 
+
+	data := make([]byte, 1024)
+       	t := time.Now().Add(time.Duration(2000*time.Millisecond)) //lager timestruct for nå+ønsket tidsforsinkelse i millisek
+        lstnConn.SetReadDeadline(t) //setter deadline på lstnConn
+       	_, _, err := lstnConn.ReadFromUDP(data)
+       	if( err != nil && getLastDigitsInIP(myIP)==getHighestActiveKey() ){
+       		state=MASTER
+       	}else{
+       		state=SLAVE
+       	}
+       	lstnConn.Close()
+}
+
+func master(){
+    
+
+//master routine
+	cmd := exec.Command("mate-terminal", "-x", "go", "run", "master_slave_2.go")
+	cmd.Run()
+	broadIP := myBroadIP+port
+	broadConn,_ := net.Dial("udp",broadIP)
+	msg := "master#"+OrdersToString()
+	write(broadConn, msg)
+	time.Sleep(500*time.Millisecond)
+	Println(orders[0][0])
+    
+	for{
+		orders[0][0]=orders[0][0]+1
+		msg := "master#"+OrdersToString()
+		write(broadConn,msg)
+		Println(orders[0][0])
+		time.Sleep(500*time.Millisecond)
+	}
+
+}
+
+func statemachine(){
+
+	myBroadIP = "129.241.187.255"
+	states := []string{"init","slave","timeout","master"}
+	
+	state=INIT
+
+// find my ip
+	myIP = getMyIP()
+	lastDigitsMyIP = getLastDigitsInIP(myIP)
+	port = ":20000"
+	Println("MyIP :",myIP, ", lastDigits :",lastDigitsMyIP)
+	
+	floors,elevs,KEY,ACTIVE=4,4,0,1
+	
+	orders = initOrders()
+	
+	orders[0][0] = 1
+	orders[KEY][2] = 141
+	orders[ACTIVE][2] = 1
+	orders[KEY][3] = lastDigitsMyIP
+	orders[ACTIVE][3] = 1
+	orders[KEY][4] = 161
+	//orders[ACTIVE][4] = 1
+	printOrders()
+	
+	for{	
+		Printf("state : "+states[state]+"\n")
+		if(state==INIT){
+			initialize()
+		}else if(state==SLAVE){
+			slave()
+		}else if(state==TIMEOUT){
+			timeout()
+		}else if(state==MASTER){
+			master()
+		}else{
+			Println("HVA faen skjedde nå??")
+		}
+	}
+}
+
+func main(){
+
+    go statemachine()
+    for{time.Sleep(1*time.Hour)}
+}
