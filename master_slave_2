@@ -10,6 +10,7 @@ import (
 )
 
 var orders[][]int
+var states[]string
 var myIP string
 var lastDigitsMyIP int
 var myBroadIP string
@@ -137,6 +138,8 @@ func readBroadcast(conn *net.UDPConn){
             key := getLastDigitsInIP(IP)
             if alreadyRegistered(key) == false {
                 registerNewElevator(key)
+            }else{
+            	registerElevatorReactivated(key)
             }
         }
     }
@@ -158,6 +161,30 @@ func getLastDigitsInIP(IP string) int {
 	return lastDigitsInIP
 }
 
+func registerMasterIsDown(){
+	for i := range orders[0] {
+		if orders[ACTIVE][i] == MASTER{
+			orders[ACTIVE][i] = 0
+		}
+	}
+}
+
+func registerIAmMaster(){
+	for i := range orders[0] {
+		if orders[KEY][i] == lastDigitsMyIP{
+			orders[ACTIVE][i] = MASTER
+		}
+	}
+}
+
+func registerElevatorReactivated(key int){
+	for i := range orders[0] {
+		if orders[KEY][i] == key{
+			orders[ACTIVE][i] = ACTIVE
+		}
+	}
+}
+
 func initialize() {
 //initialize routine
 
@@ -174,8 +201,8 @@ func initialize() {
     lstnConn.Close()
     
     if(err != nil){
-        orders[KEY][2]=getLastDigitsInIP(myIP)
-        orders[ACTIVE][2]=ACTIVE
+        orders[KEY][2]=lastDigitsMyIP
+        orders[ACTIVE][2]=MASTER
         state=MASTER
     }else{
         broadIP := myBroadIP+port
@@ -209,6 +236,7 @@ func slave(){
         orders_Str := Msg[0]
         if len(orders_Str) > 5 {                  //sjekker om mld er lang nok til å være fra master
             updateOrders(orders_Str)
+            Println(states[state]," myKey:",lastDigitsMyIP)
             printOrders()
         }
 	}
@@ -218,6 +246,8 @@ func slave(){
 
 func timeout(){
 //timeout routine
+
+	registerMasterIsDown()
 
 	lstnAddr, _ := net.ResolveUDPAddr("udp",port)
 	lstnConn, _ := net.ListenUDP("udp",lstnAddr) //oppretter UDP lytte-connection
@@ -230,6 +260,7 @@ func timeout(){
     lstnConn.Close()
     
     if( err != nil && lastDigitsMyIP==getHighestActiveKey() ){
+    	registerIAmMaster()
         state=MASTER
     }else{
         state=SLAVE
@@ -255,14 +286,16 @@ func master(){
 	
 	msg := OrdersToString()
 	write(broadConn, msg)
-	Println(orders[1][0])
+	Println(states[state]," myKey:",lastDigitsMyIP)
+	printOrders()
 	time.Sleep(500*time.Millisecond)
     
 	for{
-		orders[1][0]=orders[1][0]+1
+		orders[len(orders)-1][0]=orders[len(orders)-1][0]+1
 		msg := OrdersToString()
 		write(broadConn,msg)
-		Println(orders[1][0])
+		Println(states[state]," myKey:",lastDigitsMyIP)
+		printOrders()//Println(orders[len(orders)-1][0])
 		time.Sleep(500*time.Millisecond)
 	}
 	lstnConn.Close()
@@ -273,7 +306,7 @@ func master(){
 func statemachine(){
 
 	myBroadIP = "129.241.187.255"
-	states := []string{"init","slave","timeout","master"}
+	states = []string{"init","slave","timeout","master"}
     state=INIT
     floors,elevs,KEY,ACTIVE=4,4,0,1
 
